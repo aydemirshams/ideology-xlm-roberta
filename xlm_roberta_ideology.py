@@ -38,8 +38,6 @@ parser.add_argument('--output-dir', type=str, default='predictions')
 parser.add_argument('--model-dir', type=str, default='models')
 parser.add_argument('--save-model', action='store_true')
 parser.add_argument('--load-model', type=str)
-parser.add_argument('--predict-only', action='store_true')
-parser.add_argument('--test-file', type=str, default='dataset.tsv')
 parser.add_argument('--max-length', type=int, default=256)
 parser.add_argument('--batch-size', type=int, default=16)
 parser.add_argument('--eval-batch-size', type=int, default=32)
@@ -53,7 +51,8 @@ parser.add_argument('--focal-loss', action='store_true')
 parser.add_argument('--focal-gamma', type=float, default=2.0)
 parser.add_argument('--parliaments', nargs='+', default=['all'])
 parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
-parser.add_argument('--team-name', type=str, default='TübNLP')
+parser.add_argument('--team-name', type=str, default='tunlp')
+parser.add_argument('--runname', type=str, default='run1')
 parser.add_argument('--augment', action='store_true')
 parser.add_argument('--balance-samples', action='store_true')
 parser.add_argument('--use-scheduler', action='store_true')
@@ -293,15 +292,13 @@ def predict(model, test_texts, tokenizer, device, batch_size=32, max_length=256)
 
 
 def save_predictions(predictions, ids, output_dir, filename):
-    """Save predictions to a JSONL file."""
+    """Save predictions to a TSV file without header."""
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, filename)
     
     with open(output_path, 'w') as f:
         for id_, pred in zip(ids, predictions):
-            # Convert probability to label (0 or 1) based on threshold (e.g., 0.5)
-            label = 1 if pred > 0.5 else 0
-            f.write(f'{{"id": "{id_}", "label": {label}}}\n')
+            f.write(f"{id_}\t{pred}\n")
     
     print(f"Saved predictions to {output_path}")
 
@@ -375,52 +372,7 @@ def main():
     # Load and initialize tokenizer and model
     print(f"Loading {args.model_type}...")
     tokenizer = AutoTokenizer.from_pretrained(args.model_type)
-
-    if args.predict_only:
-        # Prediction-only mode
-        print("Running in prediction-only mode...")
-        
-        # Load the best model if it exists
-        model_path = os.path.join(args.model_dir, f"{args.model_type.split('/')[-1]}_best")
-        if not os.path.exists(model_path):
-            print(f"Error: Model not found at {model_path}. Please train the model first.")
-            return
-        
-        print(f"Loading model from {model_path}")
-        model = AutoModelForSequenceClassification.from_pretrained(model_path).to(args.device)
-        
-        # Load test data
-        test_file = os.path.join(args.data_dir, args.test_file)
-        if not os.path.exists(test_file):
-            print(f"Error: Test file {test_file} not found.")
-            return
-        
-        try:
-            ids, test_texts, _ = read_data(test_file, task='orientation', return_na=True, testset=True)
-            if not test_texts:
-                print("Empty test set.")
-                return
-            
-            print(f"Generating predictions for {args.test_file} ({len(test_texts)} samples)...")
-            predictions = predict(
-                model, test_texts, tokenizer, args.device, 
-                batch_size=args.eval_batch_size, max_length=args.max_length
-            )
-            
-            # Save predictions
-            filename = f"{args.team_name}-orientation-{args.test_file.split('.')[0]}-predictions.jsonl"
-            save_predictions(predictions, ids, args.output_dir, filename)
-            
-        except Exception as e:
-            print(f"Error processing test file: {str(e)}")
-            return
-        
-        # Print total execution time
-        total_time = time.time() - start_time
-        hours, remainder = divmod(total_time, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        print(f"\nTotal execution time: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
-        return
+    
     
     # Load data
     train_texts, train_labels, val_texts, val_labels = load_data(
@@ -557,7 +509,7 @@ def main():
             continue
         
         try:
-            ids, test_texts, _ = read_data(test_file, task='orientation', return_na=True,testset=True)
+            ids, test_texts, _ = read_data(test_file, task='orientation', return_na=True, testset=True)
             if not test_texts:
                 print(f"Skipping {parliament}: empty test set.")
                 continue
@@ -568,8 +520,8 @@ def main():
                 batch_size=args.eval_batch_size, max_length=args.max_length
             )
             
-            # Save predictions
-            filename = f"{args.team_name}-orientation-{parliament}-predictions.tsv"
+            # Save predictions using the specified format: <team>-<task>-<pcode>-<runname>.tsv
+            filename = f"{args.team_name}-orientation-{parliament}-{args.runname}.tsv"
             save_predictions(predictions, ids, args.output_dir, filename)
             
         except Exception as e:
