@@ -521,7 +521,7 @@ def main():
             )
             
             # Save predictions using the specified format: <team>-<task>-<pcode>-<runname>.tsv
-            filename = f"orientation-{parliament}-{args.runname}.tsv"
+            filename = f"orientation-{parliament}-predictions.tsv"
             save_predictions(predictions, ids, args.output_dir, filename)
             
         except Exception as e:
